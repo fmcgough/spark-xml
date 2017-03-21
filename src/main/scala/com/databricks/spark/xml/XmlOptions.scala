@@ -36,6 +36,11 @@ private[xml] class XmlOptions(
   val valueTag = parameters.getOrElse("valueTag", XmlOptions.DEFAULT_VALUE_TAG)
   val nullValue = parameters.getOrElse("nullValue", XmlOptions.DEFAULT_NULL_VALUE)
 
+  val rootAttributes: Map[String, String] = parameters.collect {
+    case (k, v) if k.startsWith(attributePrefix) && k.size > attributePrefix.length =>
+      k.substring(attributePrefix.length) -> v
+  }
+
   require(rowTag.nonEmpty, "'rowTag' option should not be empty string.")
   require(attributePrefix.nonEmpty, "'attributePrefix' option should not be empty string.")
   require(valueTag.nonEmpty, "'valueTag' option should not be empty string.")
