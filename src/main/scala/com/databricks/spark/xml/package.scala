@@ -24,7 +24,7 @@ import com.sun.xml.internal.txw2.output.IndentingXMLStreamWriter
 import org.apache.hadoop.io.compress.CompressionCodec
 
 import org.apache.spark.sql.{DataFrame, SQLContext}
-import com.databricks.spark.xml.util.XmlFile
+import com.databricks.spark.xml.util.{XmlFile, XmlRDD}
 import com.databricks.spark.xml.parsers.StaxXmlGenerator
 
 package object xml {
@@ -85,65 +85,8 @@ package object xml {
     def saveAsXmlFile(
         path: String, parameters: Map[String, String] = Map(),
         compressionCodec: Class[_ <: CompressionCodec] = null): Unit = {
-      val options = XmlOptions(parameters.toMap)
-      val rowSchema = dataFrame.schema
-      val indent = XmlFile.DEFAULT_INDENT
-      val rowSeparator = XmlFile.DEFAULT_ROW_SEPARATOR
 
-      val xmlRDD = dataFrame.rdd.mapPartitions { iter =>
-        val factory = XMLOutputFactory.newInstance()
-        val writer = new CharArrayWriter()
-        val xmlWriter = factory.createXMLStreamWriter(writer)
-        val indentingXmlWriter = new IndentingXMLStreamWriter(xmlWriter)
-        indentingXmlWriter.setIndentStep(indent)
-
-        indentingXmlWriter.writeStartElement(options.rootTag)
-        for ((name, value) <- options.rootAttributes) {
-          indentingXmlWriter.writeAttribute(name, value)
-        }
-        val startElement = writer.toString
-        writer.reset()
-
-        new Iterator[String] {
-          var firstRow: Boolean = true
-          var lastRow: Boolean = true
-
-          override def hasNext: Boolean = iter.hasNext || firstRow || lastRow
-
-          override def next: String = {
-            if (iter.nonEmpty) {
-              val xml = {
-                StaxXmlGenerator(
-                  rowSchema,
-                  indentingXmlWriter,
-                  options)(iter.next())
-                writer.toString
-              }
-              writer.reset()
-
-              if (firstRow) {
-                firstRow = false
-                startElement + xml
-              } else {
-                xml.stripPrefix(rowSeparator)
-              }
-            } else {
-              indentingXmlWriter.writeEndDocument()
-              val endElement = writer.toString
-              indentingXmlWriter.close()
-              if (!firstRow) {
-                lastRow = false
-                endElement
-              } else {
-                // This means the iterator was initially empty.
-                firstRow = false
-                lastRow = false
-                ""
-              }
-            }
-          }
-        }
-      }
+      val xmlRDD = XmlRDD(dataFrame, parameters)
 
       compressionCodec match {
         case null => xmlRDD.saveAsTextFile(path)
